@@ -1,0 +1,73 @@
+x-app-env: &app_env
+  STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID}
+  STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET}
+  STRAVA_REFRESH_TOKEN: ${STRAVA_REFRESH_TOKEN}
+  TZ: "America/Chicago"
+  PROXY_HOST: "https://statisticsforstrava.mydomain.mytld"
+  PROXY_PORT: "443"
+
+services:
+  app:
+    image: robiningelbrecht/strava-statistics:v4.7.4
+    container_name: statistics-for-strava
+    restart: unless-stopped
+    volumes:
+      - ./config:/var/www/config/app
+      - ./gear:/var/www/storage/gear-maintenance
+      - build:/var/www/build
+      - db:/var/www/storage/database
+      - files:/var/www/storage/files
+    environment:
+      <<: *app_env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2019/metrics"]
+      start_period: 60s
+    ports:
+      - 9002:8080
+    networks:
+      - frontend
+      - backend
+
+  daemon:
+    image: robiningelbrecht/strava-statistics:v4.7.4
+    container_name: statistics-for-strava-daemon
+    restart: unless-stopped
+    volumes:
+      - ./config:/var/www/config/app
+      - ./gear:/var/www/storage/gear-maintenance
+      - build:/var/www/build
+      - db:/var/www/storage/database
+      - files:/var/www/storage/files
+    environment:
+      <<: *app_env
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "test -f /var/www/storage/database/strava.db && echo 'ok' || exit 1" ]
+      start_period: 5s
+    entrypoint: ['bin/console', 'app:daemon:run']
+    networks:
+      - backend
+
+  garmin-health-to-sfs:
+    image: steveredden/garmin-health-to-sfs:v0.0.1
+    container_name: garmin-health-to-sfs
+    restart: unless-stopped
+    volumes:
+      # Mount the SAME config directory that statistics-for-strava uses.
+      # The script edits config.yaml directly.
+      - ./config:/config
+    environment:
+      GARMIN_EMAIL: ${GARMIN_EMAIL}
+      GARMIN_PASSWORD: ${GARMIN_PASSWORD}
+    networks:
+      - backend
+
+volumes:
+  build:
+  db:
+  files:
+
+networks:
+  frontend:
+    external: true
+  backend:
+    external: true
