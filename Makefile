@@ -1,25 +1,57 @@
-.PHONY: help swag-fmt dev db-reset release docker-login setup-buildx clean
-
+.PHONY: help auth sync dev docker-login setup-buildx release clean
+ 
 # Configuration
-GH_USER ?= $(GITHUB_USERNAME)
-REGISTRY := ghcr.io
-IMAGE_NAME := $(REGISTRY)/$(GH_USER)/garmin-health-to-sfs
-DOCKER_DIR := ./docker
+GH_USER      ?= $(GITHUB_USERNAME)
+REGISTRY     := ghcr.io
+IMAGE_NAME   := $(REGISTRY)/$(GH_USER)/garmin-health-to-sfs
+DOCKER_DIR   := ./docker
+CONTAINER    := garmin-health-to-sfs
 DOCKER_COMPOSE := docker compose -f $(DOCKER_DIR)/docker-compose.yml
-
+ 
 # Get version from git or default
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
-
-# Export additional local dev env details
+ 
 SHELL := /bin/bash
 	export
 	include docker/.env.local
-
+ 
 help:
-	@echo "garmin-health-to-sfs Management"
+	@echo ""
+	@echo "garmin-health-to-sfs"
+	@echo ""
+	@echo "  make auth         - Authenticate with Garmin Connect (run once to generate GARTH_TOKEN)"
+	@echo "  make sync         - Trigger a manual weight sync right now"
+	@echo "  make dev          - Rebuild and start the container locally"
 	@echo "  make release      - Prompt for version and push universal images to GHCR"
-
-
+	@echo ""
+ 
+ 
+# --- Authentication ---
+ 
+auth:
+	@echo "🔐 Starting Garmin authentication..."
+	@echo "   Follow the prompts, then copy the printed GARTH_TOKEN into docker/.env"
+	$(DOCKER_COMPOSE) exec $(CONTAINER) auth
+ 
+ 
+# --- Manual sync ---
+ 
+sync:
+	@echo "⚡ Triggering manual sync..."
+	$(DOCKER_COMPOSE) exec $(CONTAINER) python /app/sync_weight.py sync
+ 
+ 
+# --- Development ---
+ 
+dev:
+	@echo "🚀 Starting container..."
+	$(DOCKER_COMPOSE) down -v
+	$(DOCKER_COMPOSE) up -d --build
+	@echo ""
+	@echo "Container is running. If GARTH_TOKEN is not yet set, authenticate with:"
+	@echo "  make auth"
+ 
+ 
 # --- Production & Release ---
 
 docker-login:

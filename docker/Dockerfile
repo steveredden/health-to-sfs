@@ -1,9 +1,5 @@
 FROM python:3.12-slim
 
-LABEL maintainer="you"
-LABEL description="Syncs Garmin Connect weight data into statistics-for-strava config YAML"
-
-# Install cron + tini (for proper PID-1 signal handling)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cron \
         tini \
@@ -11,34 +7,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy sync script
-COPY src/sync_weight.py .
+RUN apt update && apt install -y curl \
+ && rm -rf /var/lib/apt/lists/*
 
-# Copy the cron entrypoint
+RUN curl -Ls https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+COPY src/sync_weight.py .
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Default cron schedule env var (can be overridden at runtime)
-# Default: every day at 03:00
+# Cron schedule — default: every day at 03:00
 ENV CRON_SCHEDULE="0 3 * * *"
 
-# Garmin auth
-ENV GARTH_TOKEN=""
-ENV GARTH_HOME="/garth_session"
-ENV GARMIN_EMAIL=""
-ENV GARMIN_PASSWORD=""
-
-# Sync config
+# Sync settings
 ENV CONFIG_PATH="/config/config.yaml"
-ENV LOOKBACK_DAYS="90"
+ENV LOOKBACK_DAYS="2"
 ENV WEIGHT_UNIT="kg"
 ENV DRY_RUN="false"
-
-# Persisted garth session directory
-VOLUME ["/garth_session"]
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

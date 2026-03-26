@@ -8,8 +8,7 @@ services:
     env_file:
       - .env
     environment:
-      GARMIN_EMAIL: ${GARMIN_EMAIL}
-      GARMIN_PASSWORD: ${GARMIN_PASSWORD}
+      GARTH_TOKEN: ${GARTH_TOKEN}
     volumes:
       # Mount the SAME config directory that statistics-for-strava uses.
       # The script edits config.yaml directly.

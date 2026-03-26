@@ -56,8 +56,7 @@ services:
       # The script edits config.yaml directly.
       - ./config:/config
     environment:
-      GARMIN_EMAIL: ${GARMIN_EMAIL}
-      GARMIN_PASSWORD: ${GARMIN_PASSWORD}
+      GARTH_TOKEN: ${GARTH_TOKEN}
     networks:
       - backend
 

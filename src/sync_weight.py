@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """
-Garmin Connect → Statistics for Strava weight sync
+Garmin Connect → Statistics for Strava health (weight) sync
 
-Fetches recent weight entries from Garmin Connect via garth and merges
-them into the statistics-for-strava config.yaml under:
+Usage:
+  python sync_weight.py          # run the sync (default)
+  python sync_weight.py auth     # interactive auth — generates a GARTH_TOKEN
 
-    general:
-      athlete:
-        weightHistory:
-          "YYYY-MM-DD": <weight_in_kg_or_lbs>
+Authentication is exclusively via GARTH_TOKEN (env var).
+If GARTH_TOKEN is not set the sync exits with instructions to run `auth`.
 
-Garmin returns weight in **grams** (e.g. 59189 = 59.189 kg).
+Garmin returns weight in grams (e.g. 59189 = 59.189 kg).
 """
 
 import logging
 import os
 import sys
 from datetime import date, timedelta
+from getpass import getpass
 from pathlib import Path
 
 import garth
 import yaml
-from garth.exc import GarthException
+from garth.exc import GarthException, GarthHTTPError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,59 +31,92 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Configuration — all driven by environment variables
+# Configuration — driven by environment variables
 # ---------------------------------------------------------------------------
 
-CONFIG_PATH     = Path(os.environ.get("CONFIG_PATH", "/config/config.yaml"))
-GARTH_HOME      = os.environ.get("GARTH_HOME", "/garth_session")
-GARMIN_EMAIL    = os.environ.get("GARMIN_EMAIL", "")
-GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD", "")
-
-LOOKBACK_DAYS   = int(os.environ.get("LOOKBACK_DAYS", "2"))
-# "kg" or "lbs" — must match the unitSystem in statistics-for-strava
-WEIGHT_UNIT     = os.environ.get("WEIGHT_UNIT", "kg").lower()
+CONFIG_PATH   = Path(os.environ.get("CONFIG_PATH", "/config/config.yaml"))
+GARTH_TOKEN   = os.environ.get("GARTH_TOKEN", "")
+LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "2"))
+WEIGHT_UNIT   = os.environ.get("WEIGHT_UNIT", "kg").lower()  # "kg" or "lbs"
+DRY_RUN       = os.environ.get("DRY_RUN", "false").lower() == "true"
 
 
 # ---------------------------------------------------------------------------
-# Auth
+# Auth subcommand
+# ---------------------------------------------------------------------------
+
+def cmd_auth() -> None:
+    """
+    Interactive auth flow invoked by:
+        docker compose exec garmin-health-to-sfs auth
+
+    Handles standard login and MFA. Prints the resulting GARTH_TOKEN to
+    stdout so the user can copy it into their .env file.
+    """
+    print("\n=== Garmin Connect Authentication ===")
+    print("This will generate a GARTH_TOKEN for use in your .env file.\n")
+
+    email    = input("Garmin email: ").strip()
+    password = getpass("Garmin password: ")
+
+    def mfa_prompt() -> str:
+        return input("MFA code (check your phone / authenticator app): ").strip()
+
+    print("\nLogging in to Garmin Connect...")
+    try:
+        garth.login(email, password, prompt=mfa_prompt)
+    except GarthHTTPError as exc:
+        if "429" in str(exc):
+            print(
+                "\n❌  Rate limited by Garmin (429 Too Many Requests).\n"
+                "    Wait 15-30 minutes before trying again."
+            )
+        else:
+            print(f"\n❌  Login failed: {exc}")
+        sys.exit(1)
+    except GarthException as exc:
+        print(f"\n❌  Auth error: {exc}")
+        sys.exit(1)
+
+    token = garth.client.dumps()
+
+    print("\n✅  Authentication successful!\n")
+    print("Copy the token below and set it as GARTH_TOKEN in your docker/.env file:\n")
+    print(f"GARTH_TOKEN={token}")
+    print(
+        "\nNote: this token is valid for approximately one year.\n"
+        "Re-run `docker compose exec garmin-health-to-sfs auth` when it expires."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sync — authenticate via GARTH_TOKEN
 # ---------------------------------------------------------------------------
 
 def authenticate() -> None:
-    """
-    Authenticate with Garmin Connect.
+    """Load and validate the GARTH_TOKEN from the environment."""
+    if not GARTH_TOKEN:
+        log.error(
+            "GARTH_TOKEN is not set.\n\n"
+            "Run the auth command to generate one:\n\n"
+            "    docker compose exec garmin-health-to-sfs auth\n\n"
+            "Then copy the printed token into your docker/.env file as GARTH_TOKEN=<token>"
+        )
+        sys.exit(1)
 
-    Priority order:
-      1. Saved session on disk at GARTH_HOME  (from a previous login)
-      3. GARMIN_EMAIL + GARMIN_PASSWORD  (credentials, saves session to disk)
-    """
-
-    # 1. Saved session
-    session_path = Path(GARTH_HOME)
-    if session_path.exists() and any(session_path.iterdir()):
-        log.info("Resuming saved session from %s", GARTH_HOME)
-        try:
-            garth.resume(GARTH_HOME)
-            # Use connectapi instead of .username — less likely to false-fail
-            garth.connectapi("/userprofile-service/userprofile/personal-information")
-            log.info("Saved session is valid")
-            return
-        except GarthException:
-            log.warning("Saved session expired")
-
-    # 2. Credentials
-    if GARMIN_EMAIL and GARMIN_PASSWORD:
-        log.info("Logging in with GARMIN_EMAIL credentials")
-        garth.login(GARMIN_EMAIL, GARMIN_PASSWORD)
-        session_path.mkdir(parents=True, exist_ok=True)
-        garth.save(GARTH_HOME)
-        log.info("Login successful; session saved to %s for future runs", GARTH_HOME)
-        return
-
-    log.error(
-        "No authentication method available. "
-        "Set GARMIN_EMAIL + GARMIN_PASSWORD"
-    )
-    sys.exit(1)
+    log.info("Authenticating via GARTH_TOKEN")
+    try:
+        garth.client.loads(GARTH_TOKEN)
+        _ = garth.client.username
+        log.info("Token is valid")
+    except GarthException as exc:
+        log.error(
+            "GARTH_TOKEN is invalid or expired (%s).\n\n"
+            "Re-run the auth command to generate a new token:\n\n"
+            "    docker compose exec garmin-health-to-sfs auth\n",
+            exc,
+        )
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +124,6 @@ def authenticate() -> None:
 # ---------------------------------------------------------------------------
 
 def grams_to_kg(grams: int | float) -> float:
-    """Convert Garmin's gram value to kilograms, rounded to 2dp."""
     return round(grams / 1000.0, 2)
 
 
@@ -102,20 +134,10 @@ def kg_to_lbs(kg: float) -> float:
 def fetch_weight_entries(days: int) -> dict[str, float]:
     """
     Pull weight entries from Garmin Connect for the past `days` days.
-
-    Returns {date_str: weight_value} where weight_value is in the unit
-    specified by WEIGHT_UNIT ("kg" or "lbs").
-
-    Garmin WeightData fields used:
-      - calendar_date  : datetime.date  → used as the dict key
-      - weight         : int (grams)    → converted to kg / lbs
+    Returns {date_str: weight_value} in the unit specified by WEIGHT_UNIT.
     """
     start_date = date.today() - timedelta(days=days)
-    log.info(
-        "Fetching weight data from %s (%d days back)",
-        start_date.isoformat(),
-        days,
-    )
+    log.info("Fetching weight data from %s (%d days back)", start_date.isoformat(), days)
 
     try:
         records = garth.WeightData.list(start_date.isoformat(), days)
@@ -131,7 +153,6 @@ def fetch_weight_entries(days: int) -> dict[str, float]:
         weight_kg = grams_to_kg(r.weight)
         weight_value = kg_to_lbs(weight_kg) if WEIGHT_UNIT == "lbs" else weight_kg
 
-        # calendar_date is a datetime.date object; guard against string variants
         day_str = (
             r.calendar_date.isoformat()
             if hasattr(r.calendar_date, "isoformat")
@@ -157,13 +178,7 @@ def load_config(path: Path) -> dict:
 
 def save_config(path: Path, config: dict) -> None:
     with path.open("w") as fh:
-        yaml.dump(
-            config,
-            fh,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-        )
+        yaml.dump(config, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
     log.info("Config saved to %s", path)
 
 
@@ -171,12 +186,6 @@ def merge_weight_history(
     config: dict,
     new_entries: dict[str, float],
 ) -> tuple[dict, int, int]:
-    """
-    Merge new_entries into config['general']['athlete']['weightHistory'].
-
-    New dates are added; existing dates are overwritten with the fresh value.
-    Returns (updated_config, added_count, updated_count).
-    """
     config.setdefault("general", {})
     config["general"].setdefault("athlete", {})
     existing: dict = dict(config["general"]["athlete"].get("weightHistory") or {})
@@ -189,20 +198,20 @@ def merge_weight_history(
             updated += 1
         existing[day] = weight
 
-    # Keep sorted by date for readability
     config["general"]["athlete"]["weightHistory"] = dict(sorted(existing.items()))
     return config, added, updated
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# Sync entry point
 # ---------------------------------------------------------------------------
 
-def main() -> None:
+def cmd_sync() -> None:
     log.info("=== garmin-weight-sync starting ===")
     log.info("config  : %s", CONFIG_PATH)
     log.info("lookback: %d days", LOOKBACK_DAYS)
     log.info("unit    : %s", WEIGHT_UNIT)
+    log.info("dry_run : %s", DRY_RUN)
 
     authenticate()
 
@@ -217,14 +226,31 @@ def main() -> None:
     total = len(config["general"]["athlete"]["weightHistory"])
     log.info(
         "weightHistory: %d total entries (%d new, %d updated this run)",
-        total,
-        added,
-        updated,
+        total, added, updated,
     )
 
-    save_config(CONFIG_PATH, config)
-    log.info("Sync complete")
+    if DRY_RUN:
+        log.info("[DRY RUN] Changes that would be written:")
+        for day, weight in sorted(entries.items()):
+            log.info("  %s -> %s %s", day, weight, WEIGHT_UNIT)
+        log.info("[DRY RUN] config.yaml NOT modified")
+    else:
+        save_config(CONFIG_PATH, config)
+        log.info("Sync complete")
 
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    main()
+    command = sys.argv[1] if len(sys.argv) > 1 else "sync"
+
+    if command == "auth":
+        cmd_auth()
+    elif command == "sync":
+        cmd_sync()
+    else:
+        print(f"Unknown command: {command!r}")
+        print("Usage: sync_weight.py [auth|sync]")
+        sys.exit(1)
