@@ -1,121 +1,77 @@
-# garmin-health-to-sfs
+# 📋 health-to-sfs
 
-A Docker sidecar that syncs your **Garmin Connect weight history** into the
-[statistics-for-strava](https://github.com/robiningelbrecht/statistics-for-strava)
-`config.yaml` on a cron schedule.
+A lightweight, containerized **FastAPI** ingest engine that bridges Apple Health data to a localized YAML configuration file. Designed specifically for tracking weight history and integrating with Strava-related statistics.
 
-Uses [garth](https://github.com/matin/garth) for Garmin authentication.
+## 🚀 Overview
 
----
+This project provides a secure, internet-facing endpoint for Apple Shortcuts to "dump" health samples. It handles deduplication, data validation, and nested YAML updates while remaining invisible behind a Traefik reverse proxy.
 
-
-## Quick start
-
-### 1. Configure your environment
-
-Copy `.env.example` to `.env` and fill in the non-auth values:
-
-```bash
-cp docker/.env.example docker/.env
-```
-
-Leave `GARTH_TOKEN` blank for now — you'll fill it in after step 3.
-
-### 2. Start the container
-
-```bash
-make dev
-```
-
-The container will start successfully even without a token. It will print a
-warning and skip the initial sync until a token is provided.
-
-### 3. Authenticate with Garmin Connect
-
-```bash
-make auth
-# or directly:
-docker compose exec garmin-health-to-sfs auth
-```
-
-This runs an interactive prompt inside the running container:
-
-```
-=== Garmin Connect Authentication ===
-
-Garmin email: you@example.com
-Garmin password:
-MFA code (if prompted): 123456
-
-✅  Authentication successful!
-
-Copy the token below and set it as GARTH_TOKEN in your docker/.env file:
-
-GARTH_TOKEN=eyJvYXV0aF90b2tlbi...
-```
-
-Copy the `GARTH_TOKEN=...` line into `docker/.env`, then restart:
-
-```bash
-docker compose -f docker/docker-compose.yml restart garmin-health-to-sfs
-```
-
-### 4. Trigger a manual sync to verify
-
-```bash
-make sync
-```
+* **Zero-Database:** Uses your existing strava_stats.yaml as the source of truth.
+* **Idempotent:** Safely send the last 7 days of data; only new dates are appended.
+* **Secure:** Enforces header-based API keys and masks internal validation errors from the public.
+* **Tiny Footprint:** Built on python:alpine (~50MB image).
 
 ---
 
-## Environment variables
+## 🛠 Tech Stack
 
-| Variable | Default | Description |
-|---|---|---|
-| `GARTH_TOKEN` | *(required)* | Token from `make auth`. Valid ~1 year. |
-| `CONFIG_PATH` | `/config/config.yaml` | Path to statistics-for-strava config inside container |
-| `LOOKBACK_DAYS` | `2` | Days of weight history to fetch each run |
-| `WEIGHT_UNIT` | `kg` | `kg` or `lbs` — must match statistics-for-strava's `unitSystem` |
-| `CRON_SCHEDULE` | `0 3 * * *` | Standard cron expression (default: 3am daily) |
-| `DRY_RUN` | `false` | Log what would change without writing the file |
-| `SKIP_INITIAL_SYNC` | `false` | Skip the sync that runs on container startup |
+| Component | Technology |
+| :--- | :--- |
+| **Framework** | [FastAPI](https://fastapi.tiangolo.com/) |
+| **Server** | [Uvicorn](https://www.uvicorn.org/) (ASGI) |
+| **Parser** | [ruamel.yaml](https://yaml.readthedocs.io/en/latest/) |
+| **Container** | Docker + Docker Compose |
+| **Proxy** | Traefik (HTTPS/TLS Termination) |
 
 ---
 
-## What the YAML looks like after a sync
+## ⚙️ Setup & Installation
 
-```yaml
-general:
-  athlete:
-    weightHistory:
-      "2025-06-06": 59.19
-      "2025-06-07": 59.19
+### 1. Environment Configuration
+Create a .env file in the root directory:
+
+```sh
+APP_PORT=9055
+API_SECRET=your_secure_token_here
+CONFIG_PATH=/config/strava_stats.yaml
 ```
 
----
+### 2. Deployment
+Ensure your target YAML file exists on the host machine, then fire up the stack:
 
-## Token expiry
-
-garth OAuth tokens last approximately one year. When yours expires, re-run:
-
-```bash
-make auth
+```sh
+docker compose up -d --build
 ```
 
-Update `GARTH_TOKEN` in `docker/.env` and restart the container.
+### 3. Traefik Integration
+The docker-compose.yml includes labels for automatic routing. Ensure you have a Docker network named traefik_network.
 
 ---
 
-## Troubleshooting
+## 📲 Shortcut Integration
 
-**429 Too Many Requests during `make auth`**
-Garmin rate-limits SSO login attempts. Wait 15–30 minutes and try again.
+To send data from your iPhone, configure a **Get Contents of URL** action in Apple Shortcuts:
 
-**`No weight data returned`**
-Garmin only returns entries that were explicitly logged (via the Garmin app,
-a connected scale, or a wearable). Check that you have entries in the
-Garmin Connect app for the lookback window.
+* **Method:** POST
+* **Headers:** x-api-key: your_secure_token_here
+* **Request Body:** JSON
+* **Data Structure:**
+{
+  "data": {
+    "2026-03-31": "185.2",
+    "2026-03-30": "184.8"
+  }
+}
 
-**statistics-for-strava doesn't reflect new weights**
-The app reads `config.yaml` during its next import/build cycle. Trigger one
-manually or wait for the next scheduled run.
+---
+
+## 🔒 Security Features
+
+* **Generic Errors:** Returns a flat 400 Bad Request for data errors to prevent leaking Pydantic model structures.
+* **Header Shield:** Rejects any request without a valid x-api-key with a 401 Unauthorized.
+* **No Docs:** Swagger (/docs) and ReDoc (/redoc) are disabled in production.
+
+---
+
+## 📄 License
+MIT

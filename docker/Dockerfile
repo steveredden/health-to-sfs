@@ -1,32 +1,23 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        cron \
-        tini \
-    && rm -rf /var/lib/apt/lists/*
+ARG CONTAINER_PORT=8080
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV CONFIG_PATH=/config/config.yaml
+ENV RUN_PORT=${CONTAINER_PORT}
 
 WORKDIR /app
+
+RUN apk add --no-cache gcc musl-dev libffi-dev
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN apt update && apt install -y curl \
- && rm -rf /var/lib/apt/lists/*
+COPY src/main.py .
 
-RUN curl -Ls https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+RUN mkdir /config
 
-COPY src/sync_weight.py .
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+EXPOSE ${RUN_PORT}
 
-# Cron schedule — default: every day at 03:00
-ENV CRON_SCHEDULE="0 3 * * *"
-
-# Sync settings
-ENV CONFIG_PATH="/config/config.yaml"
-ENV LOOKBACK_DAYS="2"
-ENV WEIGHT_UNIT="kg"
-ENV DRY_RUN="false"
-
-ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
+CMD uvicorn main:app --host 0.0.0.0 --port ${RUN_PORT} --proxy-headers

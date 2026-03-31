@@ -1,15 +1,22 @@
 services:
-  garmin-health-to-sfs:
+  health-to-sfs:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: garmin-health-to-sfs
+      args:
+        - CONTAINER_PORT=${APP_PORT}
+    container_name: health-to-sfs
     restart: unless-stopped
-    env_file:
-      - .env
+    networks:
+      - frontend
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
     environment:
-      GARTH_TOKEN: ${GARTH_TOKEN}
+      API_SECRET: ${API_SECRET}
+      CONFIG_PATH: "/config/config.yaml"
     volumes:
-      # Mount the SAME config directory that statistics-for-strava uses.
-      # The script edits config.yaml directly.
       - ../config:/config
+
+networks:
+  frontend:
+    external: true
