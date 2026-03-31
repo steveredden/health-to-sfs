@@ -56,15 +56,23 @@ async def log_weight(batch: WeightBatch, authorized: str = Depends(verify_api_ke
 
         history = content.setdefault("general", {}).setdefault("athlete", {}).setdefault("weightHistory", {})
 
-        added_count = 0
-        # 2. Loop through the incoming dictionary
-        # Note: Your input shows weights as strings, so we convert to float
-        for date_str, weight_val in batch.data.items():
-            if date_str not in history:
-                history[date_str] = float(weight_val)
-                added_count += 1
+        # Sort the keys (dates) alphabetically to ensure chronological order
+        sorted_dates = sorted(batch.data.keys())
 
-        # 3. Save only if we added new data
+        added_count = 0
+        for date_str in sorted_dates:
+            weight_val = batch.data[date_str]
+            
+            if date_str not in history:
+                try:
+                    # Convert to float and add to the history dictionary
+                    history[date_str] = float(str(weight_val).strip())
+                    added_count += 1
+                except ValueError:
+                    print(f"Skipping invalid weight for {date_str}: {weight_val}")
+                    continue
+
+        # Save only if we added new data
         if added_count > 0:
             with open(YAML_FILE, 'w') as f:
                 yaml.dump(content, f)

@@ -31,7 +31,6 @@ This project provides a secure, internet-facing endpoint for Apple Shortcuts to 
 Create a .env file in the root directory:
 
 ```sh
-APP_PORT=9055
 API_SECRET=your_secure_token_here
 CONFIG_PATH=/config/strava_stats.yaml
 ```
