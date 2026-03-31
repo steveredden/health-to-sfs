@@ -1,13 +1,13 @@
 # 📋 health-to-sfs
 
-A lightweight, containerized **FastAPI** ingest engine that bridges Apple Health data to a localized YAML configuration file. Designed specifically for tracking weight history and integrating with Strava-related statistics.
+A lightweight, containerized **FastAPI** ingest engine that bridges Apple Health data to a localized YAML configuration file. Designed specifically for tracking weight history and integrating with [Statistics for Strava](https://github.com/robiningelbrecht/statistics-for-strava)
 
 ## 🚀 Overview
 
 This project provides a secure, internet-facing endpoint for Apple Shortcuts to "dump" health samples. It handles deduplication, data validation, and nested YAML updates while remaining invisible behind a Traefik reverse proxy.
 
-* **Zero-Database:** Uses your existing strava_stats.yaml as the source of truth.
-* **Idempotent:** Safely send the last 7 days of data; only new dates are appended.
+* **Zero-Database:** Uses your existing config.yaml as the source of truth for weight.
+* **Idempotent:** Safely send the last *n* days of data; only new dates are appended.
 * **Secure:** Enforces header-based API keys and masks internal validation errors from the public.
 * **Tiny Footprint:** Built on python:alpine (~50MB image).
 
@@ -28,49 +28,56 @@ This project provides a secure, internet-facing endpoint for Apple Shortcuts to 
 ## ⚙️ Setup & Installation
 
 ### 1. Environment Configuration
-Create a .env file in the root directory:
+Create or update a .env file in the directory that you host statistics-for-strava, and add the following keys:
 
 ```sh
 API_SECRET=your_secure_token_here
-CONFIG_PATH=/config/strava_stats.yaml
+CONFIG_PATH=/config/config-athlete.yaml
 ```
 
 ### 2. Deployment
-Ensure your target YAML file exists on the host machine, then fire up the stack:
+Add the health-to-sfs service to your existing `docker-compose` yaml.  Ensure you map the same `./config` volume to the new service:
 
 ```sh
-docker compose up -d --build
-```
+...
 
-### 3. Traefik Integration
-The docker-compose.yml includes labels for automatic routing. Ensure you have a Docker network named traefik_network.
+services:
+  app:
+    image: robiningelbrecht/strava-statistics:v4.7.4
+    container_name: statistics-for-strava
+    restart: unless-stopped
+    volumes:
+      - ./config:/var/www/config/app
+...
+
+  health-to-sfs:
+    image: ghcr.io/steveredden/health-to-sfs:v0.0.1
+    container_name: health-to-sfs
+    restart: unless-stopped
+    volumes:
+      - ./config:/config
+    environment:
+      API_SECRET: ${API_SECRET}
+      CONFIG_PATH: "/config/config-athlete.yaml"
+    networks:
+      - frontend
+    ports:
+      - 9005:8080
+...
+```
 
 ---
 
 ## 📲 Shortcut Integration
 
-To send data from your iPhone, configure a **Get Contents of URL** action in Apple Shortcuts:
+The project relies on your weight being present in the Apple Health (HealthKit) application.
 
-* **Method:** POST
-* **Headers:** x-api-key: your_secure_token_here
-* **Request Body:** JSON
-* **Data Structure:**
-{
-  "data": {
-    "2026-03-31": "185.2",
-    "2026-03-30": "184.8"
-  }
-}
+A shortcut has been created to get you started:
 
----
+https://www.icloud.com/shortcuts/c5564d7df29b4454a6d9d7816fce8bc2
 
-## 🔒 Security Features
+![shortcut-screenshot](docs/assets/images/screenshot-health-to-sfs.png)
 
-* **Generic Errors:** Returns a flat 400 Bad Request for data errors to prevent leaking Pydantic model structures.
-* **Header Shield:** Rejects any request without a valid x-api-key with a 401 Unauthorized.
-* **No Docs:** Swagger (/docs) and ReDoc (/redoc) are disabled in production.
+Only the first two text fields need to be configured.  Fill them in your appropriate URL and chosen API Secret.
 
----
-
-## 📄 License
-MIT
+Make sure to retain the `/ingest` path in the URL
