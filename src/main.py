@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Header, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
@@ -7,13 +8,16 @@ from typing import Dict, List, Union
 import json
 import os
 import statistics
+import secrets
 
 app = FastAPI(docs_url=None, redoc_url=None)
 yaml = YAML()
+security = HTTPBasic()
 
-# Configuration via Environment Variables
+# Configuration
 YAML_FILE = os.getenv("CONFIG_PATH", "/config/config.yaml")
 RESOLUTION = os.getenv("CONFLICT_RESOLUTION", "MIN").upper()
+
 # Set a threshold for "suspicious" data (e.g., 20% deviation from local average)
 OUTLIER_THRESHOLD = float(os.getenv("OUTLIER_THRESHOLD", "0.20"))
 
@@ -36,10 +40,25 @@ class WeightBatch(BaseModel):
                 raise ValueError("Data must be a valid JSON string or dictionary")
         return v
 
-def verify_api_key(x_api_key: str = Header(None)):
-    if x_api_key is None or x_api_key != os.getenv("API_SECRET"):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return x_api_key
+def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    """Exclusively validates via Basic Auth using AUTH_USER and API_SECRET."""
+    correct_username = os.getenv("AUTH_USER", "admin")
+    correct_password = os.getenv("API_SECRET")
+    
+    if not correct_password:
+        print("ERROR: API_SECRET environment variable is not set.")
+        raise HTTPException(status_code=500, detail="Server configuration error")
+
+    is_user_ok = secrets.compare_digest(credentials.username, correct_username)
+    is_pass_ok = secrets.compare_digest(credentials.password, correct_password)
+
+    if not (is_user_ok and is_pass_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 def resolve_value(values: List[float]) -> float:
     """Applies the CONFLICT_RESOLUTION logic and rounds to 2 decimal places."""
@@ -63,8 +82,7 @@ def check_for_outliers(date_str: str, value: float, history: Dict[str, float]):
     diff = abs(value - local_avg) / local_avg
 
     if diff > OUTLIER_THRESHOLD:
-        print(f"⚠️ WARNING: Potential outlier detected for {date_str}!")
-        print(f"   Input: {value} | Local Average: {local_avg:.2f} | Deviation: {diff:.1%}")
+        print(f"⚠️ WARNING: Potential outlier for {date_str}! Value: {value} | Avg: {local_avg:.2f} | Diff: {diff:.1%}")
 
 @app.get("/health")
 async def health_check():
@@ -72,7 +90,7 @@ async def health_check():
     return {"status": "healthy", "config_loaded": os.path.exists(YAML_FILE)}
 
 @app.post("/ingest")
-async def log_weight(batch: WeightBatch, authorized: str = Depends(verify_api_key)):
+async def log_weight(batch: WeightBatch, user: str = Depends(verify_auth)):
     try:
         # Load existing YAML
         if os.path.exists(YAML_FILE):
@@ -117,12 +135,11 @@ async def log_weight(batch: WeightBatch, authorized: str = Depends(verify_api_ke
             with open(YAML_FILE, 'w') as f:
                 yaml.dump(content, f)
 
-        # Return the requested field along with other metadata
         return {
             "status": "success", 
             "added": added_count, 
             "updated": updated_count,
-            "total_in_request": len(batch.data),  # Count of unique dates in the POST body
+            "total_in_request": len(batch.data),
             "resolution_mode": RESOLUTION
         }
 
