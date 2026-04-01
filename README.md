@@ -33,7 +33,7 @@ Add the health-to-sfs service to your existing `docker-compose` yaml.  Ensure yo
 
 services:
   app:
-    image: robiningelbrecht/strava-statistics:v4.7.4
+    image: robiningelbrecht/strava-statistics:v4.7.5
     container_name: statistics-for-strava
     restart: unless-stopped
     volumes:
@@ -46,6 +46,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./config:/config                #LOCAL MOUNT NEEDS OT MATCH ABOVE
+    env_file:
+      - .env
     environment:
       API_SECRET: ${API_SECRET}
       CONFIG_PATH: "/config/config-athlete.yaml"
@@ -79,3 +81,9 @@ https://www.icloud.com/shortcuts/f5fd9a8472894a67a0854caefefcdd02
 Only the first two text fields need to be configured.  Fill them in your appropriate URL and chosen API Secret.
 
 Make sure to retain the `/ingest` path in the URL
+
+## Pangolin
+
+Consider allowing the `/ingest` path to bypass authentication:
+
+![pangolin-screenshot](docs/assets/images/pangolin-bypass.png)
