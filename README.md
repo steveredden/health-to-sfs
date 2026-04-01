@@ -1,6 +1,12 @@
 # 📋 health-to-sfs
 
+> [!NOTE]
+> This app was mostly vibe coded
+
 A lightweight, containerized **FastAPI** ingest engine that bridges Apple Health data to a localized YAML configuration file. Designed specifically for tracking weight history and integrating with [Statistics for Strava](https://github.com/robiningelbrecht/statistics-for-strava)
+
+> [!NOTE]
+> This app is in no way affiliated with or part of the official Strava software suite, nor [Statistics for Strava](https://github.com/robiningelbrecht/statistics-for-strava)
 
 ## 🚀 Overview
 
@@ -12,6 +18,22 @@ This project provides a secure, internet-facing endpoint for Apple Shortcuts to 
 * **Tiny Footprint:** Built on python:alpine (~50MB image).
 
 ---
+
+## 📲 Shortcut Integration
+
+The project relies on your weight being present in the Apple Health (HealthKit) application.  Firstly, you'll need an iPhone.  Secondly, you'll need a smart scale or application (e.g. Garmin) that writes to the Apple Health app.
+
+Start with this shortcut (open it on your iPhone) to start retrieving health data from the Health app, and `POST` it to a URL:
+
+https://www.icloud.com/shortcuts/f5fd9a8472894a67a0854caefefcdd02
+
+![shortcut-screenshot](docs/assets/images/screenshot-health-to-sfs.png)
+
+Only the first two text fields need to be configured.  Fill them in your appropriate URL and chosen API Secret.
+
+Make sure to retain the `/ingest` path in the URL
+
+This project, running as a container, opens a port and listens for new weight data...
 
 ## ⚙️ Setup & Installation
 
@@ -67,20 +89,6 @@ services:
 ```
 
 ---
-
-## 📲 Shortcut Integration
-
-The project relies on your weight being present in the Apple Health (HealthKit) application.
-
-A shortcut has been created to get you started:
-
-https://www.icloud.com/shortcuts/f5fd9a8472894a67a0854caefefcdd02
-
-![shortcut-screenshot](docs/assets/images/screenshot-health-to-sfs.png)
-
-Only the first two text fields need to be configured.  Fill them in your appropriate URL and chosen API Secret.
-
-Make sure to retain the `/ingest` path in the URL
 
 ## Pangolin
 
