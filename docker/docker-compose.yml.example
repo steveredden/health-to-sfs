@@ -48,7 +48,7 @@ services:
       - backend
 
   health-to-sfs:
-    image: steveredden/health-to-sfs:v0.0.1
+    image: steveredden/health-to-sfs:latest
     container_name: health-to-sfs
     restart: unless-stopped
     volumes:
@@ -57,12 +57,19 @@ services:
       - ./config:/config
     environment:
       API_SECRET: ${API_SECRET}
-      APP_PORT: ${APP_PORT:-9055}
-      CONFIG_PATH: "/config/config.yaml"
+      CONFIG_PATH: "/config/config-weight.yaml"
+      CONFLICT_RESOLUTION: MIN
+      OUTLIER_THRESHOLD: 0.15
     networks:
       - frontend
     ports:
-      - "${APP_PORT}:${APP_PORT}"
+      - "9005:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   build:

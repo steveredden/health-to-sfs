@@ -13,26 +13,16 @@ This project provides a secure, internet-facing endpoint for Apple Shortcuts to 
 
 ---
 
-## 🛠 Tech Stack
-
-| Component | Technology |
-| :--- | :--- |
-| **Framework** | [FastAPI](https://fastapi.tiangolo.com/) |
-| **Server** | [Uvicorn](https://www.uvicorn.org/) (ASGI) |
-| **Parser** | [ruamel.yaml](https://yaml.readthedocs.io/en/latest/) |
-| **Container** | Docker + Docker Compose |
-| **Proxy** | Traefik (HTTPS/TLS Termination) |
-
----
-
 ## ⚙️ Setup & Installation
 
 ### 1. Environment Configuration
 Create or update a .env file in the directory that you host statistics-for-strava, and add the following keys:
 
 ```sh
-API_SECRET=your_secure_token_here
-CONFIG_PATH=/config/config-athlete.yaml
+API_SECRET: your_secure_token_here
+CONFIG_PATH: /config/config-weight.yaml  #consider breaking out your weight into a separate yaml
+CONFLICT_RESOLUTION: MIN  #MIN, MAX, or AVG - What to do when multiple weights are found for the same day
+OUTLIER_THRESHOLD: 0.15   #warning mechanism to warn if the data is this % (0-1) different than other values
 ```
 
 ### 2. Deployment
@@ -47,22 +37,30 @@ services:
     container_name: statistics-for-strava
     restart: unless-stopped
     volumes:
-      - ./config:/var/www/config/app
+      - ./config:/var/www/config/app    #LOCAL MOUNT NEEDS TO MATCH BELOW
 ...
 
   health-to-sfs:
-    image: ghcr.io/steveredden/health-to-sfs:v0.0.1
+    image: ghcr.io/steveredden/health-to-sfs:latest
     container_name: health-to-sfs
     restart: unless-stopped
     volumes:
-      - ./config:/config
+      - ./config:/config                #LOCAL MOUNT NEEDS OT MATCH ABOVE
     environment:
       API_SECRET: ${API_SECRET}
       CONFIG_PATH: "/config/config-athlete.yaml"
+      CONFLICT_RESOLUTION: MIN
+      OUTLIER_THRESHOLD: 0.15
     networks:
       - frontend
     ports:
       - 9005:8080
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 ...
 ```
 
@@ -74,7 +72,7 @@ The project relies on your weight being present in the Apple Health (HealthKit) 
 
 A shortcut has been created to get you started:
 
-https://www.icloud.com/shortcuts/c5564d7df29b4454a6d9d7816fce8bc2
+https://www.icloud.com/shortcuts/f5fd9a8472894a67a0854caefefcdd02
 
 ![shortcut-screenshot](docs/assets/images/screenshot-health-to-sfs.png)
 
