@@ -31,6 +31,14 @@ https://www.icloud.com/shortcuts/7dde7305c41a4a1f90e1817e5d12f37f
 
 This project, running as a container, opens a port and listens for new weight data...
 
+It is recommended you test the shortcut and get valid responses, for example:
+
+![shortcut-test](docs/assets/images/output.png)
+
+And finally, set up an automation to automically execute at a certain time of day:
+
+![shortcut-schedule](docs/assets/images/automation.png)
+
 ## ⚙️ Setup & Installation
 
 ### 1. Environment Configuration
