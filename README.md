@@ -3,7 +3,7 @@
 > [!NOTE]
 > This app was mostly vibe coded
 
-A lightweight, containerized **FastAPI** ingest engine that your weight data to a local [Statistics for Strava](https://github.com/robiningelbrecht/statistics-for-strava) YAML configuration file.
+A lightweight, containerized **FastAPI** ingest engine that synchronizes your weight data to a local [Statistics for Strava](https://github.com/robiningelbrecht/statistics-for-strava) YAML configuration file.
 
 > [!NOTE]
 > This app is in no way affiliated with or part of the official Strava software suite, nor [Statistics for Strava](https://github.com/robiningelbrecht/statistics-for-strava)
