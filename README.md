@@ -44,7 +44,7 @@ The logic also requires Basic Authentication, combining the environment variable
 
 ---
 
-It is recommended to split out your weight yaml to a unique file: <img width="14" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/statistics-for-strava.svg"> [Splitting your configuration into multiple files](https://statistics-for-strava-docs.robiningelbrecht.be/#/configuration/main-configuration?id=splitting-your-configuration-into-multiple-files)
+It is recommended to split out your weight yaml to a unique file: <img width="14" target="_blank" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/statistics-for-strava.svg"> [Splitting your configuration into multiple files](https://statistics-for-strava-docs.robiningelbrecht.be/#/configuration/main-configuration?id=splitting-your-configuration-into-multiple-files)
 
 For example, you may have a unique `config-weight.yaml` set up as such:
 
