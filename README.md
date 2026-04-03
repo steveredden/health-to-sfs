@@ -57,6 +57,8 @@ general:
       '2025-02-01': 82.1
 ```
 
+You must configure the `CONFIG_PATH` environment variable to match the name/path of the file, e.g. `config/config-weight.yaml`
+
 ---
 
 ## ⚙️ Setup & Installation
@@ -98,19 +100,10 @@ services:
     environment:
       AUTH_USER: ${AUTH_USER}
       API_SECRET: ${API_SECRET}
-      CONFIG_PATH: "/config/config-athlete.yaml"
+      CONFIG_PATH: "/config/config-athlete.yaml"  #MATCHES YAML THAT CONTAINS weightHistory
       CONFLICT_RESOLUTION: MIN
-      OUTLIER_THRESHOLD: 0.15
-    networks:
-      - frontend
     ports:
       - 9005:8080
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 ...
 ```
 
@@ -118,9 +111,11 @@ services:
 
 ## Pangolin
 
-Set up your Pangolin instance to allow basic auth, using the `AUTH_USER` and `API_SECRET` from your configuration
+If you would like to secure your endpoint with [Pangolin](https://github.com/fosrl/pangolin), set up the public site to allow basic auth, using the `AUTH_USER` and `API_SECRET` from your configuration
 
 ![pangolin-screenshot](docs/assets/images/pangolin-auth.png)
+
+---
 
 ## Sending Data
 
