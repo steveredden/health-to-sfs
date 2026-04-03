@@ -10,7 +10,7 @@ A lightweight, containerized **FastAPI** ingest engine that synchronizes your we
 
 ## 🚀 Overview
 
-This project provides a secure, internet-facing endpoint to receive weight payloads (e.g. Apple Shortcuts to "dump" health samples, or you to send data manually). It handles deduplication, data validation, and nested YAML updates while remaining invisible behind a Traefik reverse proxy.
+This project provides a secure, internet-facing endpoint to receive weight payloads (e.g. Apple Shortcuts to "dump" health samples, or you to send data manually).
 
 The small [main.py](src/main.py) accepts an HTTP POST to the `/ingest` route, with a body like so:
 
