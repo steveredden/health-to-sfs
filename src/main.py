@@ -23,7 +23,7 @@ OUTLIER_THRESHOLD = float(os.getenv("OUTLIER_THRESHOLD", "0.20"))
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    print(f"DEBUG: Validation Error: {exc.errors()}") 
+    print(f"DEBUG:    Validation Error: {exc.errors()}") 
     return JSONResponse(status_code=400, content={"detail": "Bad Request"})
 
 class WeightBatch(BaseModel):
@@ -82,7 +82,7 @@ def check_for_outliers(date_str: str, value: float, history: Dict[str, float]):
     diff = abs(value - local_avg) / local_avg
 
     if diff > OUTLIER_THRESHOLD:
-        print(f"⚠️ WARNING: Potential outlier for {date_str}! Value: {value} | Avg: {local_avg:.2f} | Diff: {diff:.1%}")
+        print(f"WARNING:  Potential outlier for {date_str}! Value: {value} | Avg: {local_avg:.2f} | Diff: {diff:.1%}")
 
 @app.get("/health")
 async def health_check():

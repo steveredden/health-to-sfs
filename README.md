@@ -42,7 +42,9 @@ Data will be adjusted as per your `CONFLICT_RESOLUTION` environment variable as 
 
 The logic also requires Basic Authentication, combining the environment variables `AUTH_USER` and `API_SECRET` as the basic `username:password`
 
-It is recommended to split out your weight yaml to a unique file: [Splitting your configuration into multiple files](https://statistics-for-strava-docs.robiningelbrecht.be/#/configuration/main-configuration?id=splitting-your-configuration-into-multiple-files)
+---
+
+It is recommended to split out your weight yaml to a unique file: <img width="14" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/statistics-for-strava.svg"> [Splitting your configuration into multiple files](https://statistics-for-strava-docs.robiningelbrecht.be/#/configuration/main-configuration?id=splitting-your-configuration-into-multiple-files)
 
 For example, you may have a unique `config-weight.yaml` set up as such:
 
